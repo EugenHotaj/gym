@@ -1,2 +1,5 @@
 *un~
 *swp
+
+__pycache__/
+*.egg-info/
