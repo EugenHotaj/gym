@@ -123,9 +123,10 @@ class SnakeEnv(gym.Env):
             self._screen = pygame.display.set_mode(np.multiply(self._dims,
                                                                self._px_size))
 
+        # Closing out of the pygame window should kill the program.
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                close = True
+                sys.exit()
 
         if close:
             self._screen = None
