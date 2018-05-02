@@ -1,9 +1,15 @@
 """Agent to solve (my own implementation) of Snake."""
 
 from absl import app
+from absl import flags
 import gym
 import gym_snake
 import numpy as np
+
+FLAGS = flags.FLAGS
+
+flags.DEFINE_string('render_mode', 'human',
+                    'The rendering mode for the environment')
 
 
 class QFunctionApproxAgent(object):
@@ -14,12 +20,13 @@ class QFunctionApproxAgent(object):
         self._alpha = 0.00001
         self._eps = 0.3
 
-        # bias + action + distance to apple + sorrounding
-        self._weights = np.zeros(1 + 1 + 1 + 4)
+        # bias + state + action
+        self._weights = np.zeros(1 + 5 + 3)
         self._prev_state_action = None
 
         self._step = 0
         self._episode = 0
+        self._cumulative_reward = 0
 
     def _phi(self, state, action):
         """Creates features from (state, action)."""
@@ -35,7 +42,11 @@ class QFunctionApproxAgent(object):
         apple = np.array([apple[1][0], apple[0][0]])
         dist = np.linalg.norm(head-apple)
 
-        return np.array([1, action, dist, right, up, left, down])
+        one_hot_action = np.zeros(3)
+        one_hot_action[action] = 1
+
+        return np.concatenate(([1, dist, right, up, left, down],
+                               one_hot_action))
 
     def _find_max_action(self, state):
         """Finds the action with the maximum expected reward in the `state`."""
@@ -63,7 +74,6 @@ class QFunctionApproxAgent(object):
         phi = self._phi(*self._prev_state_action)
         self._weights -= (self._alpha *
                           (q_prime - np.dot(phi, self._weights))) * phi
-        print(self._episode, self._step, q_prime)
 
     def act(self, state, reward=None, done=False):
         """Updates the internal Q Function weights and choses an action.
@@ -85,6 +95,16 @@ class QFunctionApproxAgent(object):
             action = self._find_max_action(state)
             self._prev_state_action = (state, action)
             return action
+
+        if reward > 0:
+            print('ate apple')
+        if reward < 0:
+            reward = -10
+        self._cumulative_reward += reward
+        if (self._step % 100 == 0):
+            print('Episode: %d. Avg Reward per 100 steps: %f' %
+                  (self._episode, self._cumulative_reward / 100))
+            self._cumulative_reward = 0
 
         self._update_q(state, reward, done)
 
@@ -125,7 +145,7 @@ def main(argv):
 
         if done:
             counter = -1
-        env.render()
+        env.render(FLAGS.render_mode)
 
 
 if __name__ == '__main__':
