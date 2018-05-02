@@ -3,8 +3,8 @@
 from absl import app
 from absl import flags
 import gym
-import gym_snake
 import numpy as np
+import gym_snake
 
 FLAGS = flags.FLAGS
 
@@ -17,7 +17,7 @@ class QFunctionApproxAgent(object):
         self._actions = actions
 
         self._gamma = 0.9
-        self._alpha = 0.00001
+        self._alpha = 0.0001
         self._eps = 0.3
 
         # bias + state + action
@@ -75,7 +75,7 @@ class QFunctionApproxAgent(object):
         self._weights -= (self._alpha *
                           (q_prime - np.dot(phi, self._weights))) * phi
 
-    def act(self, state, reward=None, done=False):
+    def act(self, state, reward, done):
         """Updates the internal Q Function weights and choses an action.
 
         Args:
@@ -89,20 +89,14 @@ class QFunctionApproxAgent(object):
         self._step += 1
         # TODO(ehotaj): decay alpha and eps
         if not self._prev_state_action:
-            assert not reward
-            assert not done
             self._episode += 1
             action = self._find_max_action(state)
             self._prev_state_action = (state, action)
             return action
 
-        if reward > 0:
-            print('ate apple')
-        if reward < 0:
-            reward = -10
         self._cumulative_reward += reward
-        if (self._step % 100 == 0):
-            print('Episode: %d. Avg Reward per 100 steps: %f' %
+        if (self._step % 1000 == 0):
+            print('Episode: %d. Avg Reward per 1000 steps: %f' %
                   (self._episode, self._cumulative_reward / 100))
             self._cumulative_reward = 0
 
@@ -125,27 +119,11 @@ def main(argv):
     del argv  # Unused.
 
     env = gym.make('Snake-v0')
-    env.reset()
     agent = QFunctionApproxAgent(env.action_space, (10, 10))
-    # TODO(ehotaj): probably the worst way to do this act/observe loop
-    counter = -1
+    state, reward, done, _ = env.reset()
     while True:
-        counter += 1
-        if counter == 0:
-            env.reset()
-            state, reward, done, _ = env.step(env.action_space.sample())
-            # TODO(ehotaj): there may be some bug in the gym-snake code
-            # as in a substantial number of cases, the first action leads to
-            # an game over. Theoretically, this should not be possible.
-            if not done:
-                action = agent.act(state)
-        else:
-            state, reward, done, _ = env.step(action)
-            action = agent.act(state, reward, done)
-
-        if done:
-            counter = -1
-        env.render(FLAGS.render_mode)
+        action = agent.act(state, reward, done)
+        state, reward, done, _ = env.step(action) if not done else env.reset()
 
 
 if __name__ == '__main__':
