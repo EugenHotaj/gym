@@ -131,7 +131,7 @@ class QFunctionApproxAgent(object):
         self._prev_state_action = (state, action)
         if self._step < 100000:
             self._eps -= 1/100000
-        if self._step > 100000:
+        if self._step > 500000:
             FLAGS.render_mode = 'human'
 
         # Report metrics
