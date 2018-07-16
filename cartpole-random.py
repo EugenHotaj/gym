@@ -32,6 +32,9 @@ def simulate_env(model, num_times=3, render=False):
 
 def main():
     pool = multiprocessing.Pool(processes=8)
+    # There is a chance that using only 10 random initialization will not
+    # produce a model which solves Cartpole. Simply increasing this to 100+
+    # will effectivley guarantee a solution is found.
     models = [np.random.uniform(size=(4,)) for i in range(10)]
     results = pool.map(simulate_env, models)
     idxs = np.argsort(results)
