@@ -1,4 +1,9 @@
-"""Agent to solve (my own implementation) of Snake."""
+"""Approximate QLearning Agent to solve (my own implementation) of Snake.
+
+For the environment implementation, refer to:
+    https://www.github.com/EugenHotaj/gym-snake
+"""
+
 from absl import app
 from absl import flags
 import gym
@@ -11,23 +16,28 @@ flags.DEFINE_string('render_mode', 'human',
                     'The rendering mode for the environment')
 
 
+def _softmax(x):
+    e_x = np.exp(x - np.max(x))
+    return e_x / e_x.sum()
+
+
 class QFunctionApproxAgent(object):
     def __init__(self, actions, dims):
         self._actions = actions
 
         self._gamma = 0.99
-        self._alpha = .001
+        self._alpha = .01
         self._eps = 1
 
-        # bias + state + action
-        self._weights = np.random.uniform(0, 1, 19)
-        self._prev_state_action = None
+        # [actions]  x [bias + state]
+        self._weights = np.random.uniform(size=(3, 7))
+        self._prev_state = None
 
         self._step = 0
         self._episode = 0
         self._episode_reward = 0
 
-    def _phi(self, state, action):
+    def _phi(self, state):
         """Creates features from (state, action)."""
         head = np.where(state == 2)
         right = state[(head[0], (head[1] + 1) % 10)]
@@ -50,44 +60,25 @@ class QFunctionApproxAgent(object):
         ydist = (apple[1] - head[1])
         apple_dist = [xdist, ydist]
 
-        s = np.concatenate((snake_one_hot, apple_dist))
-        phi = self._dim_scaling(s, action)
-        return phi
-
-    def _dim_scaling(self, phi_state, action):
-        phi = np.zeros(len(phi_state) * self._actions.n)
-        start_index = len(phi_state) * action
-        phi[start_index:start_index+len(phi_state)] = phi_state
-        return np.concatenate(([1], phi))
-
-    def _find_max_action(self, state):
-        """Finds the action with the maximum expected reward in the `state`."""
-        max_action = 0
-        max_q_val = np.dot(self._weights, self._phi(state, max_action))
-        for action in range(1, self._actions.n):
-            q_val = np.dot(self._weights, self._phi(state, action))
-            if q_val > max_q_val:
-                max_q_val = q_val
-                max_action = action
-
-        return max_action
+        # [1] is the bias term
+        return np.concatenate(([1], snake_one_hot, apple_dist))
 
     def _update_q(self, next_state, reward, done):
         """Performs "gradient descent" on the Q-Function weights.
 
         Note: no automatic differentiation is necessary since the partial
-        derivatives were done by hand.
+        derivatives are computed manually.
         """
-        phi = self._phi(*self._prev_state_action)
+        phi = self._phi(self._prev_state)
         q = np.dot(self._weights, phi)
         if done:
-            correction = reward
+            correction = reward * np.ones(shape=(3, 1))
         else:
-            phi_prime = self._phi(next_state,
-                                  self._find_max_action(next_state))
-            q_prime = np.dot(self._weights, phi_prime)
-            correction = reward + (self._gamma * q_prime) - q
-        self._weights += self._alpha * correction * phi
+            phi_prime = self._phi(next_state)
+            q_prime = max(np.dot(self._weights, phi_prime))
+            correction = (reward + self._gamma * q_prime) - q
+        self._weights += (self._alpha * correction.reshape((3, 1))
+                          * phi.reshape(1, 7))
 
     def act(self, state, reward, done):
         """Updates the internal Q Function weights and choses an action.
@@ -103,30 +94,34 @@ class QFunctionApproxAgent(object):
         self._step += 1
         # Anneal hyperparameters
         if self._step <= 100000 and self._step % 100 == 0:
-            self._eps -= .0007
+            self._eps -= .00095
 
-        if not self._prev_state_action:
+        if self._prev_state is None:
             self._episode += 1
         else:
             self._update_q(state, reward, done)
             self._episode_reward += reward
 
         if done:
-            self._prev_state_action = None
+            self._prev_state = None
 
             if self._episode % 100 == 0:
-                print(('Step: %d; Alpha: %.2f, Eps: %.2f, Avg Ep Reward: %.2f;'
+                print(('Step: %d; Alpha: %.3f, Eps: %.2f, Avg Ep Reward: %.2f;'
                        % (self._step, self._alpha, self._eps,
                            self._episode_reward / 100)))
+                print(self._weights)
                 self._episode_reward = 0
             return None
 
-        if not self._prev_state_action or np.random.uniform() < self._eps:
+        if np.random.uniform() < self._eps:
             action = self._actions.sample()
         else:
-            action = self._find_max_action(self._prev_state_action[0])
+            phi = self._phi(state)
+            actions = np.dot(self._weights, phi)
+            actions_dist = _softmax(actions)
+            action = np.argmax(actions_dist)
 
-        self._prev_state_action = (state, action)
+        self._prev_state = state
         return action
 
 
@@ -136,8 +131,13 @@ def main(argv):
     env = gym.make('Snake-v0')
     agent = QFunctionApproxAgent(env.action_space, (10, 10))
     state, reward, done, _ = env.reset()
+    steps = 0
+    render_mode = 'train'
     while True:
-        env.render(FLAGS.render_mode)
+        steps += 1
+        if steps > 400000:
+            render_mode = 'human'
+        env.render(render_mode)
         action = agent.act(state, reward, done)
         state, reward, done, _ = env.step(action) if not done else env.reset()
 
