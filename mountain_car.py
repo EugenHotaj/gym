@@ -16,7 +16,7 @@ from rl.agents import dqn
 
 _ENV_NAME = 'MountainCar-v0'
 
-_WINDOW_LENGTH = 1
+_WINDOW_LENGTH = 200
 
 
 def _build_agent(input_shape, nb_actions):

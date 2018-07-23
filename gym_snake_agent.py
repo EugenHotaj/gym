@@ -31,7 +31,7 @@ class QFunctionApproxAgent(object):
 
         # [actions]  x [bias + state]
         self._weights = np.random.uniform(size=(3, 7))
-        self._prev_state = None
+        self._prev = {'state': None, 'action': None}
 
         self._step = 0
         self._episode = 0
@@ -69,16 +69,16 @@ class QFunctionApproxAgent(object):
         Note: no automatic differentiation is necessary since the partial
         derivatives are computed manually.
         """
-        phi = self._phi(self._prev_state)
+        phi = self._phi(self._prev['state'])
         q = np.dot(self._weights, phi)
+        q = q[self._prev['action']]
         if done:
-            correction = reward * np.ones(shape=(3, 1))
+            correction = reward
         else:
             phi_prime = self._phi(next_state)
             q_prime = max(np.dot(self._weights, phi_prime))
-            correction = (reward + self._gamma * q_prime) - q
-        self._weights += (self._alpha * correction.reshape((3, 1))
-                          * phi.reshape(1, 7))
+            correction = reward + self._gamma * q_prime - q
+        self._weights[self._prev['action']] += self._alpha * correction * phi
 
     def act(self, state, reward, done):
         """Updates the internal Q Function weights and choses an action.
@@ -96,14 +96,15 @@ class QFunctionApproxAgent(object):
         if self._step <= 100000 and self._step % 100 == 0:
             self._eps -= .00095
 
-        if self._prev_state is None:
+        if self._prev['state'] is None:
             self._episode += 1
         else:
             self._update_q(state, reward, done)
             self._episode_reward += reward
 
         if done:
-            self._prev_state = None
+            self._prev['state'] = None
+            self._prev['action'] = None
 
             if self._episode % 100 == 0:
                 print(('Step: %d; Alpha: %.3f, Eps: %.2f, Avg Ep Reward: %.2f;'
@@ -121,7 +122,8 @@ class QFunctionApproxAgent(object):
             actions_dist = _softmax(actions)
             action = np.argmax(actions_dist)
 
-        self._prev_state = state
+        self._prev['state'] = state
+        self._prev['action'] = action
         return action
 
 
